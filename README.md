@@ -1,97 +1,60 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# P2P Vision
 
-# Getting Started
+A peer-to-peer video communication application built with React Native, leveraging WebRTC technology for real-time video and audio streaming.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## 🌟 Features
 
-## Step 1: Start Metro
+- **Peer-to-Peer Video Calls**: Direct video communication between users without intermediary servers
+- **WebRTC Integration**: Real-time communication using WebRTC protocol
+- **Cross-Platform**: Runs on both iOS and Android devices
+- **Signaling Server**: Custom signaling server for establishing peer connections
+- **Modern React Native**: Built with the latest React Native architecture
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+### 1. Clone the Repository
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+```bash
+git clone https://github.com/abhiram-karanth-core/p2p-vision.git
+cd p2p-vision
+```
+### 2. Install Dependencies
 
-```sh
+```bash
 # Using npm
-npm start
+npm install
 
 # OR using Yarn
-yarn start
+yarn install
 ```
+### 3. Run the Application
 
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
+```bash
 # Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+npx react-native run-android
 ```
+### Signaling Server
 
-### iOS
+The application includes a custom signaling server (`deployed_signaling_server.js`) for coordinating peer connections. You may need to:
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+1. Deploy the signaling server to a hosting service (e.g., Heroku, AWS, DigitalOcean, Render)
+2. Update the signaling server URL in your application configuration
+3. Ensure WebSocket connections are properly 
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
 
-```sh
-bundle install
-```
+## 📱 Features & Functionality
 
-Then, and every time you update your native dependencies, run:
+### WebRTC Implementation
 
-```sh
-bundle exec pod install
-```
+- **Peer Connection**: Establishes direct connections between users
+- **Media Streams**: Handles video and audio streaming
+- **ICE Candidates**: Manages network traversal for peer discovery
+- **Session Description Protocol (SDP)**: Negotiates connection parameters
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+### Signaling
 
-```sh
-# Using npm
-npm run ios
+- **WebSocket Communication**: Real-time signaling between peers
+- **Offer/Answer Exchange**: SDP offer and answer mechanism
+- **ICE Candidate Exchange**: Network candidate sharing
 
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+<p align="center">
+  <img src="flow.svg" alt="Message Flow" width="800"/>
+</p>

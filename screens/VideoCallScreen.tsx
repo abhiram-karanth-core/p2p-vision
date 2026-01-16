@@ -8,10 +8,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  TextInput,
-  ScrollView,
   Dimensions,
   StatusBar,
+  ActivityIndicator,
+  Platform,
+  PanResponder,
+  Animated,
+  TextInput,
+  ScrollView,
 } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
 import { MediaStream } from 'react-native-webrtc';
@@ -33,20 +37,44 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ route, navigation }) 
   const [chatInput, setChatInput] = useState<string>('');
   const [showChat, setShowChat] = useState<boolean>(false);
   const [connectedUsers, setConnectedUsers] = useState<string[]>([]);
-  
+
   // Enhanced state management
   const [isWaitingForRemote, setIsWaitingForRemote] = useState<boolean>(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
 
   const webRTCService = useRef<WebRTCService | null>(null);
-  
+
   const roomId = route?.params?.roomId || 'test-room';
   const userId = route?.params?.userId || `user-${Date.now()}`;
 
+  // Draggable Chat Logic
+  const pan = useRef(new Animated.ValueXY()).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        pan.setOffset({
+          x: (pan.x as any)._value,
+          y: (pan.y as any)._value
+        });
+      },
+      onPanResponderMove: Animated.event(
+        [
+          null,
+          { dx: pan.x, dy: pan.y }
+        ],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: () => {
+        pan.flattenOffset();
+      }
+    })
+  ).current;
+
   useEffect(() => {
     initializeWebRTC();
-    
+
     return () => {
       cleanup();
     };
@@ -55,15 +83,15 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ route, navigation }) 
   const initializeWebRTC = async (): Promise<void> => {
     try {
       console.log('Initializing WebRTC...');
-      
+
       webRTCService.current = new WebRTCService();
-      
+
       const callbacks = {
         onLocalStream: (stream: MediaStream) => {
           console.log('Local stream callback received');
           setLocalStream(stream);
         },
-        
+
         onRemoteStream: (stream: MediaStream) => {
           console.log('Remote stream callback received:', {
             id: stream.id,
@@ -76,11 +104,11 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ route, navigation }) 
           setIsWaitingForRemote(false);
           setConnectionError(null);
         },
-        
+
         onConnectionStateChange: (state: string) => {
           console.log('Connection state changed:', state);
           setConnectionState(state);
-          
+
           if (state === 'connected' || state === 'completed') {
             setIsConnected(true);
             setIsReconnecting(false);
@@ -96,22 +124,22 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ route, navigation }) 
             setConnectionError(null);
           }
         },
-        
+
         onChatMessage: (data: ChatMessage) => {
           setChatMessages(prev => [...prev, data]);
         },
-        
+
         onRoomUpdate: (clients: string[]) => {
           console.log('Room update received:', clients);
           setConnectedUsers(clients);
-          
+
           if (clients.length <= 1) {
             setIsWaitingForRemote(true);
             setRemoteStream(null);
             setIsConnected(false);
           }
         },
-        
+
         onCallEvents: (event: CallEvent, data: CallEventData) => {
           handleCallEvents(event, data);
         },
@@ -125,7 +153,7 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ route, navigation }) 
       );
 
       console.log('WebRTC initialization completed');
-      
+
     } catch (error) {
       console.error('Failed to initialize WebRTC:', error);
       setConnectionError('Failed to initialize: ' + (error as Error).message);
@@ -155,7 +183,7 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ route, navigation }) 
         Alert.alert('Call Ended', `${data.ender} ended the call`);
         break;
       case 'user-left':
-        Alert.alert('User Left', 'The other user has left the call');
+        // Alert.alert('User Left', 'The other user has left the call');
         setIsWaitingForRemote(true);
         setRemoteStream(null);
         setIsConnected(false);
@@ -183,9 +211,9 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ route, navigation }) 
       'Are you sure you want to end the call?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'End Call', 
-          style: 'destructive', 
+        {
+          text: 'End Call',
+          style: 'destructive',
           onPress: () => {
             webRTCService.current?.endCall();
             cleanup();
@@ -203,19 +231,6 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ route, navigation }) 
     }
   };
 
-  // const retryConnection = async (): Promise<void> => {
-  //   try {
-  //     setIsReconnecting(true);
-  //     setConnectionError(null);
-  //     console.log('Retrying connection...');
-  //     await webRTCService.current?.restartConnection();
-  //   } catch (error) {
-  //     console.error('Retry failed:', error);
-  //     setConnectionError('Retry failed: ' + (error as Error).message);
-  //     setIsReconnecting(false);
-  //   }
-  // };
-
   const cleanup = (): void => {
     webRTCService.current?.disconnect();
     setLocalStream(null);
@@ -225,63 +240,12 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ route, navigation }) 
     setConnectionError(null);
   };
 
-//   const showDebugInfo = (): void => {
-//     const localStatus = webRTCService.current?.getLocalStreamStatus();
-//     const remoteStatus = webRTCService.current?.getRemoteStreamStatus();
-    
-//     const debugInfo = `LOCAL STREAM:
-// Has Stream: ${localStatus?.hasStream ? 'Yes' : 'No'}
-// Audio Tracks: ${localStatus?.audioTracks || 0}
-// Video Tracks: ${localStatus?.videoTracks || 0}
-// Stream Active: ${localStatus?.streamActive ? 'Yes' : 'No'}
-
-// REMOTE STREAM:
-// Has Stream: ${remoteStatus?.hasStream ? 'Yes' : 'No'}
-// Audio Tracks: ${remoteStatus?.audioTracks || 0}
-// Video Tracks: ${remoteStatus?.videoTracks || 0}
-// Stream Active: ${remoteStatus?.streamActive ? 'Yes' : 'No'}
-// Stream ID: ${remoteStatus?.streamId || 'None'}
-// Stream URL: ${remoteStatus?.streamURL ? 'Available' : 'None'}
-
-// PEER CONNECTION:
-// Connection State: ${remoteStatus?.peerConnectionState || 'Unknown'}
-// ICE State: ${remoteStatus?.iceConnectionState || 'Unknown'}
-// Signaling State: ${remoteStatus?.signalingState || 'Unknown'}
-
-// ROOM:
-// Connected Users: ${connectedUsers.length}
-// Waiting for Remote: ${isWaitingForRemote ? 'Yes' : 'No'}
-// Is Connected: ${isConnected ? 'Yes' : 'No'}
-
-// UI STATE:
-// Remote Stream in UI: ${remoteStream ? 'Yes' : 'No'}`;
-
-//     Alert.alert('Debug Information', debugInfo, [
-//       { text: 'OK', style: 'cancel' },
-//       { 
-//         text: 'Restart Local Stream', 
-//         onPress: () => webRTCService.current?.restartLocalStream()
-//       },
-//       {
-//         text: 'Force Remote Update',
-//         onPress: () => webRTCService.current?.forceRemoteStreamUpdate()
-//       },
-//       {
-//         text: 'Restart Connection',
-//         onPress: () => webRTCService.current?.restartConnection()
-//       }
-//     ]);
-//   };
-
   const renderChatMessages = () => (
-    <ScrollView style={styles.chatContainer}>
+    <ScrollView style={styles.chatContainer} contentContainerStyle={{ paddingBottom: 10 }}>
       {chatMessages.map((msg, index) => (
         <View key={index} style={styles.chatMessage}>
-          <Text style={styles.chatSender}>{msg.sender}:</Text>
+          <Text style={styles.chatSender}>{msg.sender}</Text>
           <Text style={styles.chatText}>{msg.message}</Text>
-          <Text style={styles.chatTime}>
-            {new Date(msg.time).toLocaleTimeString()}
-          </Text>
         </View>
       ))}
     </ScrollView>
@@ -289,73 +253,67 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ route, navigation }) 
 
   const renderWaitingContainer = () => (
     <View style={styles.waitingContainer}>
-      <Text style={styles.waitingText}>
-        {isWaitingForRemote ? 'Waiting for other user...' : 'Connecting...'}
+      <View style={styles.avatarPlaceholder}>
+        <Text style={styles.avatarText}>{userId.charAt(0).toUpperCase()}</Text>
+      </View>
+
+      <Text style={styles.waitingTitle}>
+        {isWaitingForRemote ? 'Waiting for others...' : 'Connecting...'}
       </Text>
-      
-      <Text style={styles.debugText}>
-        Room: {roomId}
+
+      <Text style={styles.waitingSubtitle}>
+        Room ID: {roomId}
       </Text>
-      
-      <Text style={styles.debugText}>
-        ICE: {connectionState} | Users: {connectedUsers.length}
-      </Text>
-      
+
+      <ActivityIndicator size="large" color="#4CAF50" style={{ marginTop: 20 }} />
+
       {connectionError && (
-        <Text style={styles.errorText}>{connectionError}</Text>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{connectionError}</Text>
+        </View>
       )}
-      
+
       {isReconnecting && (
         <Text style={styles.reconnectingText}>Reconnecting...</Text>
       )}
-      
-      {/* <TouchableOpacity style={styles.debugButton} onPress={showDebugInfo}>
-        <Text style={styles.debugButtonText}>Debug Info</Text>
-      </TouchableOpacity> */}
-      
-      {/* {connectionState === 'failed' && (
-        <TouchableOpacity 
-          style={styles.retryButton}
-          onPress={retryConnection}
-          disabled={isReconnecting}
-        >
-          <Text style={styles.retryButtonText}>
-            {isReconnecting ? 'Retrying...' : 'Retry Connection'}
-          </Text>
-        </TouchableOpacity>
-      )} */}
     </View>
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
-    <View style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
-      
-      {/* Connection Status */}
-      <View style={styles.statusBar}>
-        <Text style={styles.statusText}>
-          Room: {roomId} | ICE: {connectionState} | Users: {connectedUsers.length} | Connected: {isConnected ? 'Yes' : 'No'}
-        </Text>
-      </View>
-      
-      {/* Video Views */}
-      <View style={styles.videoContainer}>
-        {/* Remote Video (Main) */}
-        {remoteStream ? (
-          <RTCView
-            streamURL={remoteStream.toURL()}
-            style={styles.remoteVideo}
-            objectFit="cover"
-            zOrder={0}
-          />
-        ) : (
-          renderWaitingContainer()
-        )}
 
-        {/* Local Video (Picture-in-Picture) */}
+      <View style={styles.container}>
+
+        {/* Video Layer */}
+        <View style={styles.videoLayer}>
+          {remoteStream ? (
+            <RTCView
+              streamURL={remoteStream.toURL()}
+              style={styles.remoteVideo}
+              objectFit="cover"
+              zOrder={0}
+            />
+          ) : (
+            <View style={styles.remoteVideoPlaceholder}>
+              {renderWaitingContainer()}
+            </View>
+          )}
+        </View>
+
+        {/* Connection Status Pill */}
+        <View style={styles.topBar}>
+          <View style={styles.statusPill}>
+            <View style={[styles.statusDot, { backgroundColor: isConnected ? '#4CAF50' : '#FFC107' }]} />
+            <Text style={styles.statusText}>
+              {isConnected ? 'Connected' : 'Waiting'} • {formatTime(new Date())}
+            </Text>
+          </View>
+        </View>
+
+        {/* Local Video - Picture in Picture */}
         {localStream && (
-          <View style={styles.localVideoContainer}>
+          <View style={styles.localVideoWrapper}>
             <RTCView
               streamURL={localStream.toURL()}
               style={styles.localVideo}
@@ -365,264 +323,360 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ route, navigation }) 
             />
           </View>
         )}
-      </View>
 
-      {/* Chat Overlay */}
-      {showChat && (
-        <View style={styles.chatOverlay}>
-          {renderChatMessages()}
-          <View style={styles.chatInputContainer}>
-            <TextInput
-              style={styles.chatInput}
-              value={chatInput}
-              onChangeText={setChatInput}
-              placeholder="Type a message..."
-              placeholderTextColor="#999"
-              returnKeyType="send"
-              onSubmitEditing={sendChatMessage}
-            />
-            <TouchableOpacity onPress={sendChatMessage} style={styles.sendButton}>
-              <Text style={styles.sendButtonText}>Send</Text>
+        {/* Chat Overlay */}
+        {showChat && (
+          <Animated.View
+            style={[
+              styles.chatOverlay,
+              { transform: pan.getTranslateTransform() }
+            ]}
+          >
+            {/* Draggable Header */}
+            <View style={styles.chatHeader} {...panResponder.panHandlers}>
+              <View style={styles.dragHandle} />
+              <View style={styles.headerContent}>
+                <Text style={styles.chatTitle}>Chat</Text>
+                <TouchableOpacity onPress={() => setShowChat(false)}>
+                  <Text style={styles.closeChatText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            {renderChatMessages()}
+            <View style={styles.chatInputWrapper}>
+              <TextInput
+                style={styles.chatInput}
+                value={chatInput}
+                onChangeText={setChatInput}
+                placeholder="Type a message..."
+                placeholderTextColor="#999"
+                returnKeyType="send"
+                onSubmitEditing={sendChatMessage}
+              />
+              <TouchableOpacity onPress={sendChatMessage} style={styles.sendButton}>
+                <Text style={styles.sendButtonText}>Send</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* Floating Controls Bar */}
+        <View style={styles.controlsWrapper}>
+          <View style={styles.controlsContainer}>
+            <TouchableOpacity
+              style={[styles.controlButton, !isMicOn && styles.controlButtonOff]}
+              onPress={toggleMicrophone}
+            >
+              <Text style={styles.controlButtonText}>{isMicOn ? '🎤' : '🔇'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.controlButton, !isCameraOn && styles.controlButtonOff]}
+              onPress={toggleCamera}
+            >
+              <Text style={styles.controlButtonText}>{isCameraOn ? '📹' : '📷'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
+              <Text style={styles.endCallButtonText}>📞</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.controlButton} onPress={switchCamera}>
+              <Text style={styles.controlButtonText}>🔄</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.controlButton, showChat && styles.controlButtonActive]}
+              onPress={() => setShowChat(!showChat)}
+            >
+              <Text style={styles.controlButtonText}>💬</Text>
             </TouchableOpacity>
           </View>
         </View>
-      )}
 
-      {/* Control Buttons */}
-      <View style={styles.controlsContainer}>
-        <TouchableOpacity
-          style={[styles.controlButton, !isMicOn && styles.controlButtonOff]}
-          onPress={toggleMicrophone}
-        >
-          <Text style={styles.controlButtonText}>
-            {isMicOn ? '🎤' : '🔇'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.controlButton, !isCameraOn && styles.controlButtonOff]}
-          onPress={toggleCamera}
-        >
-          <Text style={styles.controlButtonText}>
-            {isCameraOn ? '📹' : '📷'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.controlButton} onPress={switchCamera}>
-          <Text style={styles.controlButtonText}>🔄</Text>
-        </TouchableOpacity>
-
-        {/* <TouchableOpacity
-          style={styles.controlButton}
-          onPress={showDebugInfo}
-        >
-          <Text style={styles.controlButtonText}>📞</Text>
-        </TouchableOpacity> */}
-
-        <TouchableOpacity
-          style={[styles.controlButton, showChat && styles.controlButtonActive]}
-          onPress={() => setShowChat(!showChat)}
-        >
-          <Text style={styles.controlButtonText}>💬</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.endCallButton} onPress={endCall}>
-          <Text style={styles.endCallButtonText}>📞</Text>
-        </TouchableOpacity>
       </View>
-    </View>
     </SafeAreaView>
   );
 };
 
+// Helper to format time
+const formatTime = (date: Date) => {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#000',
   },
-  statusBar: {
-    height: 30,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    position: 'relative',
+  },
+  videoLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+  },
+  remoteVideo: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+  },
+  remoteVideoPlaceholder: {
+    flex: 1,
+    backgroundColor: '#121212',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 10,
+  },
+  // Waiting State
+  waitingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#444',
+  },
+  avatarText: {
+    fontSize: 40,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  waitingTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  waitingSubtitle: {
+    color: '#888',
+    fontSize: 16,
+  },
+  errorContainer: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: 'rgba(244, 67, 54, 0.1)',
+    borderRadius: 8,
+  },
+  errorText: {
+    color: '#ff6b6b',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  reconnectingText: {
+    color: '#FFC107',
+    marginTop: 10,
+  },
+
+  // Top Status Bar
+  topBar: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 10 : 20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(30, 30, 30, 0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
   },
   statusText: {
     color: '#fff',
     fontSize: 12,
+    fontWeight: '500',
   },
-  videoContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  remoteVideo: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  waitingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#000',
-    paddingHorizontal: 20,
-  },
-  waitingText: {
-    color: '#fff',
-    fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  debugText: {
-    color: '#999',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 5,
-  },
-  errorText: {
-    color: '#f44336',
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 10,
-    marginBottom: 10,
-  },
-  reconnectingText: {
-    color: '#FF9800',
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 10,
-  },
-  debugButton: {
-    marginTop: 20,
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  debugButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  retryButton: {
-    marginTop: 10,
-    backgroundColor: '#FF9800',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  localVideoContainer: {
+
+  // Local Video PiP
+  localVideoWrapper: {
     position: 'absolute',
-    top: 50,
+    top: Platform.OS === 'ios' ? 60 : 70,
     right: 20,
-    width: 120,
+    width: 110,
     height: 160,
-    borderRadius: 8,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#333',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    zIndex: 20,
   },
   localVideo: {
     flex: 1,
   },
+
+  // Chat Overlay
   chatOverlay: {
     position: 'absolute',
+    bottom: 120, // above controls
     left: 20,
     right: 20,
-    top: 100,
-    bottom: 150,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: 10,
-    padding: 10,
+    height: 300,
+    backgroundColor: 'rgba(20, 20, 20, 0.95)',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    zIndex: 30,
+  },
+  chatHeader: {
+    marginBottom: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  dragHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2.5,
+    alignSelf: 'center',
+    marginBottom: 10,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  chatTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  closeChatText: {
+    color: '#aaa',
+    fontSize: 18,
+    padding: 5,
   },
   chatContainer: {
     flex: 1,
-    marginBottom: 10,
   },
   chatMessage: {
-    marginBottom: 8,
-    padding: 8,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 5,
+    marginBottom: 12,
   },
   chatSender: {
-    color: '#4CAF50',
-    fontWeight: 'bold',
-    fontSize: 12,
+    color: '#aaa',
+    fontSize: 11,
+    marginBottom: 2,
   },
   chatText: {
     color: '#fff',
     fontSize: 14,
-    marginTop: 2,
+    lineHeight: 20,
   },
-  chatTime: {
-    color: '#999',
-    fontSize: 10,
-    textAlign: 'right',
-    marginTop: 2,
-  },
-  chatInputContainer: {
+  chatInputWrapper: {
     flexDirection: 'row',
+    marginTop: 10,
     alignItems: 'center',
   },
   chatInput: {
     flex: 1,
-    height: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 20,
-    paddingHorizontal: 15,
+    height: 44,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 22,
+    paddingHorizontal: 16,
     color: '#fff',
     marginRight: 10,
   },
   sendButton: {
     backgroundColor: '#4CAF50',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sendButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+    fontSize: 12,
+  },
+
+
+
+
+  // Controls Bar
+  controlsWrapper: {
+    position: 'absolute',
+    bottom: 30, // Lower it a bit
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20, // Ensure safe margins
+    alignItems: 'center',
+    zIndex: 40,
   },
   controlsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'space-around', // Distribute evenly
+    width: '100%', // Use full available width minus padding
+    maxWidth: 400, // Constraint on tablets
+    backgroundColor: '#1C1C1E', // Solid Dark Pill
+    paddingVertical: 12,
+    borderRadius: 35,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   controlButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 48, // Reduced from 64 to fit screen
+    height: 48,
+    borderRadius: 24, // Perfect Circle
+    backgroundColor: '#3A3A3C', // Lighter Grey for contrast against pill
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  controlButtonActive: {
-    backgroundColor: '#4CAF50',
   },
   controlButtonOff: {
-    backgroundColor: '#f44336',
+    backgroundColor: '#fff',
+  },
+  controlButtonActive: {
+    backgroundColor: '#34C759',
   },
   controlButtonText: {
-    fontSize: 24,
+    fontSize: 20, // Adjusted for smaller button
   },
   endCallButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#f44336',
+    backgroundColor: '#FF3B30',
+    width: 56, // Slightly larger than others
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   endCallButtonText: {
     fontSize: 28,
+    color: '#fff',
     transform: [{ rotate: '135deg' }],
   },
 });
